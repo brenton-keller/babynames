@@ -1,13 +1,21 @@
+setwd('C:\\4Summer\\babynames')
+
 #' Data acquisition functions for SSA baby names
 library(data.table)
 library(dplyr)
 library(curl)
+library(scales)
+
+source("R/analysis_functions.R")
+source("R/data_acquisition.R")
+source("R/diversity_metrics.R")
+source("R/plotting_functions.R")
 
 # Download data
 babynames <- get_ssa_babynames(include_state = TRUE)
 
 # Find era winners  
-winners <- get_era_winners(babynames$national, 1980)
+# winners <- get_era_winners(babynames$national, 1980)
 
 # Plot specific names
 # plot_name("Amiri",sex_input = "M")
