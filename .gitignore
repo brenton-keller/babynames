@@ -1,0 +1,22 @@
+# R
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# Data (adjust based on data policy)
+data/*.csv
+data/*.txt
+data/*.zip
+
+# Outputs
+outputs/*.png
+outputs/*.pdf
+*.html
+
+# OS
+.DS_Store
+Thumbs.db
+
+*.code-workspace
