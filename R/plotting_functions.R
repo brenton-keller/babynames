@@ -1,43 +1,12 @@
 # VISUALIZATION ====
 
+#' Plot baby name popularity for one or more names.
+#'
+#' @param name_input Character vector or list of names grouped for plotting.
+#' @param years Numeric vector of years to include in the plot.
+#' @param sex_input Character vector of sex codes to include (e.g. `"M"`, `"F"`).
+#' @return NULL; draws the popularity plot and prints diagnostics.
 plot_name <- function(name_input, years = 1970:2024, sex_input = c("M","F")) {
-  
-  # Your text box function
-  add_text_box <- function(x, y, text, cex = 0.8, col = "black", 
-                          size_multiplier_x = 1.0, size_multiplier_y = 1.5,
-                          glass_effect = TRUE, glass_style = "clean",
-                          font = 1, adj = c(0.5, 0.5), xpd = TRUE) {
-    
-    text_width <- strwidth(text, cex = cex, font = font)
-    text_height <- strheight(text, cex = cex, font = font)
-    
-    base_padding_x <- text_width * 0.075
-    base_padding_y <- text_height * 0.4
-    padding_x <- base_padding_x * size_multiplier_x
-    padding_y <- base_padding_y * size_multiplier_y
-    
-    if(adj[1] == 0.5) {
-      left <- x - (text_width / 2) - padding_x
-      right <- x + (text_width / 2) + padding_x
-    } else if(adj[1] == 0) {
-      left <- x - padding_x
-      right <- x + text_width + padding_x
-    } else {
-      left <- x - text_width - padding_x
-      right <- x + padding_x
-    }
-    
-    bottom <- y - (text_height / 2) - padding_y
-    top <- y + (text_height / 2) + padding_y
-    
-    if(glass_effect && glass_style == "clean") {
-      rect(left, bottom, right, top, 
-           col = rgb(1, 1, 1, 0.8),
-           border = NA, xpd = xpd)
-    }
-    
-    text(x, y, text, cex = cex, col = col, font = font, adj = adj, xpd = xpd)
-  }
   
   # Handle input and create group mapping
   if (is.list(name_input)) {
@@ -182,219 +151,79 @@ plot_name <- function(name_input, years = 1970:2024, sex_input = c("M","F")) {
 
 # ADVANCED ANALYTICS ====
 
+# Main function - now much cleaner and easier to read
+#' Detect structural breakpoints in baby name popularity.
+#'
+#' @param dt data.table with at least `year`, `sex`, `name`, and `n` columns.
+#' @param name_input Character vector or list of names to analyse.
+#' @param sex_param Single sex code used to filter the data.
+#' @param years Numeric vector of years to include in the analysis.
+#' @param h Minimum segment size passed to `strucchange::breakpoints`.
+#' @param plot Logical; draw the breakpoint plot when TRUE.
+#' @param verbose Logical; print diagnostic information when TRUE.
+#' @param return_data Logical; invisibly return the assembled results when TRUE.
+#' @param style Character flag reserved for alternate plot themes.
+#' @param comparison_mode Logical flag reserved for comparative workflows.
+#' @param show_segment_labels Logical; annotate the plot with segment summaries when TRUE.
+#' @return Invisibly returns a named list of per-name breakpoint results when `return_data` is TRUE.
 detect_breakpoints <- function(dt, name_input, sex_param = "M", years = 1970:2024, 
                               h = 0.15, plot = TRUE, verbose = TRUE,
                               return_data = TRUE, style = "modern",
                               comparison_mode = FALSE, show_segment_labels = TRUE) {
   
-  # Enhanced text box function
-  add_text_box <- function(x, y, text, cex = 0.8, col = "black", 
-                          size_multiplier_x = 1.0, size_multiplier_y = 1.5,
-                          glass_effect = TRUE, glass_style = "clean",
-                          font = 1, adj = c(0.5, 0.5), xpd = TRUE) {
+  if (verbose) cat("=== BREAKPOINT ANALYSIS ===\n")
+  
+  # Validate inputs and prepare data
+  validated_inputs <- validate_inputs(dt, name_input, sex_param, years, verbose)
+  names_vec <- validated_inputs$names_vec
+  available_years <- validated_inputs$available_years
+  
+  # Process each name
+  name_colors <- c("#08519c", "#d94701", "#238b45", "#a50f15", "#6a51a3", "#8c2d04")
+  all_results <- list()
+  
+  for (idx in seq_along(names_vec)) {
+    name_val <- names_vec[idx]
+    name_color <- name_colors[((idx - 1) %% length(name_colors)) + 1]
     
-    text_width <- strwidth(text, cex = cex, font = font)
-    text_height <- strheight(text, cex = cex, font = font)
+    if (verbose) cat("\n", idx, ". Processing:", name_val, "\n")
     
-    base_padding_x <- text_width * 0.075
-    base_padding_y <- text_height * 0.4
-    padding_x <- base_padding_x * size_multiplier_x
-    padding_y <- base_padding_y * size_multiplier_y
+    # Extract and prepare data for this name
+    data <- extract_name_data(dt, name_val, sex_param, available_years, verbose)
     
-    if(adj[1] == 0.5) {
-      left <- x - (text_width / 2) - padding_x
-      right <- x + (text_width / 2) + padding_x
-    } else if(adj[1] == 0) {
-      left <- x - padding_x
-      right <- x + text_width + padding_x
-    } else {
-      left <- x - text_width - padding_x
-      right <- x + padding_x
-    }
+    # Perform breakpoint analysis
+    bp_result <- perform_breakpoint_analysis(data, name_val, h, verbose)
     
-    bottom <- y - (text_height / 2) - padding_y
-    top <- y + (text_height / 2) + padding_y
+    # Analyze segments
+    segments <- analyze_segments(data, bp_result$bp_years, verbose)
     
-    if(glass_effect && glass_style == "clean") {
-      rect(left, bottom, right, top, 
-           col = rgb(1, 1, 1, 0.85),
-           border = rgb(0.7, 0.7, 0.7, 0.5), 
-           lwd = 0.5, xpd = xpd)
-    }
-    
-    text(x, y, text, cex = cex, col = col, font = font, adj = adj, xpd = xpd)
-    
-    # Return box boundaries for overlap detection
-    return(invisible(list(left = left, right = right, bottom = bottom, top = top)))
+    all_results[[name_val]] <- list(
+      data = data, 
+      breakpoints = bp_result$bp_years, 
+      segments = segments,
+      bp_test = bp_result$bp_test, 
+      color = name_color
+    )
   }
   
-  # Smart positioning function for segment labels
-  position_segment_labels <- function(all_results, plot_xlim, plot_ylim) {
-    all_labels <- list()
-    
-    for (name_val in names(all_results)) {
-      result <- all_results[[name_val]]
-      
-      if (length(result$segments) == 0) next
-      
-      cat("DIAGNOSTIC - Positioning labels for", name_val, "\n")
-      
-      name_labels <- list()
-      
-      for (seg in result$segments) {
-        if (is.null(seg)) next
-        
-        # Calculate midpoint year
-        mid_year <- (seg$start_year + seg$end_year) / 2
-        
-        # Get the actual data value at midpoint (interpolate if needed)
-        seg_data_subset <- result$data[year >= seg$start_year & year <= seg$end_year]
-        
-        # Find closest year to midpoint
-        closest_year_idx <- which.min(abs(seg_data_subset$year - mid_year))
-        mid_pct <- seg_data_subset$pct[closest_year_idx]
-        
-        # If midpoint falls between years, interpolate
-        if (abs(seg_data_subset$year[closest_year_idx] - mid_year) > 0.5) {
-          before_idx <- max(1, closest_year_idx - 1)
-          after_idx <- min(nrow(seg_data_subset), closest_year_idx + 1)
-          
-          if (before_idx != after_idx) {
-            weight <- (mid_year - seg_data_subset$year[before_idx]) / 
-                     (seg_data_subset$year[after_idx] - seg_data_subset$year[before_idx])
-            mid_pct <- seg_data_subset$pct[before_idx] * (1 - weight) + 
-                      seg_data_subset$pct[after_idx] * weight
-          }
-        }
-        
-        # Create label text (two lines)
-        label_line1 <- sprintf("Segment %d (%d-%d)", seg$segment_num, seg$start_year, seg$end_year)
-        label_line2 <- sprintf("%s %s (%.3f%%/decade, R²=%.2f)", 
-                              seg$trend_symbol, seg$trend, seg$slope_per_decade, seg$r_squared)
-        label_text <- paste(label_line1, label_line2, sep = "\n")
-        
-        # Determine if label should go above or below line
-        # Strategy: alternate above/below, but also consider line slope and available space
-        plot_height <- diff(plot_ylim)
-        
-        # Start with alternating pattern
-        base_above <- (seg$segment_num %% 2 == 1)
-        
-        # Adjust based on line position relative to plot
-        line_position_ratio <- mid_pct / max(plot_ylim)
-        
-        # If line is in top 40% of plot, prefer below
-        if (line_position_ratio > 0.6) {
-          above_line <- FALSE
-        } else if (line_position_ratio < 0.3) {
-          # If line is in bottom 30% of plot, prefer above
-          above_line <- TRUE
-        } else {
-          # Use alternating pattern in middle range
-          above_line <- base_above
-        }
-        
-        # Calculate vertical offset
-        base_offset <- plot_height * 0.08  # 8% of plot height
-        
-        if (above_line) {
-          label_y <- mid_pct + base_offset
-        } else {
-          label_y <- mid_pct - base_offset
-        }
-        
-        # Ensure label stays within plot bounds
-        label_y <- max(plot_ylim[1] + plot_height * 0.05, 
-                      min(plot_ylim[2] - plot_height * 0.05, label_y))
-        
-        cat(sprintf("  Segment %d: mid_year=%.1f, mid_pct=%.3f, label_y=%.3f, %s\n",
-                   seg$segment_num, mid_year, mid_pct, label_y, 
-                   ifelse(above_line, "above", "below")))
-        
-        name_labels[[length(name_labels) + 1]] <- list(
-          x = mid_year,
-          y = label_y,
-          text = label_text,
-          color = result$color,
-          above_line = above_line,
-          segment_num = seg$segment_num,
-          name = name_val
-        )
-      }
-      
-      all_labels[[name_val]] <- name_labels
-    }
-    
-    return(all_labels)
+  # Create plot if requested
+  if (plot && length(all_results) > 0) {
+    create_breakpoint_plot(all_results, show_segment_labels)
   }
   
-  # Overlap resolution function
-  resolve_label_overlaps <- function(all_labels, plot_xlim, plot_ylim) {
-    # Flatten all labels into single list for overlap detection
-    flat_labels <- list()
-    for (name_val in names(all_labels)) {
-      for (label in all_labels[[name_val]]) {
-        flat_labels[[length(flat_labels) + 1]] <- label
-      }
-    }
-    
-    if (length(flat_labels) <= 1) return(all_labels)
-    
-    cat("DIAGNOSTIC - Resolving", length(flat_labels), "label overlaps\n")
-    
-    # Sort by x position
-    flat_labels <- flat_labels[order(sapply(flat_labels, function(l) l$x))]
-    
-    plot_height <- diff(plot_ylim)
-    min_vertical_separation <- plot_height * 0.12  # Minimum 12% separation
-    
-    # Adjust overlapping labels
-    for (i in 2:length(flat_labels)) {
-      curr_label <- flat_labels[[i]]
-      prev_label <- flat_labels[[i-1]]
-      
-      # Check horizontal overlap (labels need some x-separation too)
-      x_overlap <- abs(curr_label$x - prev_label$x) < diff(plot_xlim) * 0.08
-      
-      if (x_overlap) {
-        y_diff <- abs(curr_label$y - prev_label$y)
-        
-        if (y_diff < min_vertical_separation) {
-          # Push current label away from previous
-          if (curr_label$y > prev_label$y) {
-            # Current is above, push it higher
-            curr_label$y <- prev_label$y + min_vertical_separation
-          } else {
-            # Current is below, push it lower
-            curr_label$y <- prev_label$y - min_vertical_separation
-          }
-          
-          # Keep within bounds
-          curr_label$y <- max(plot_ylim[1] + plot_height * 0.05,
-                             min(plot_ylim[2] - plot_height * 0.05, curr_label$y))
-          
-          flat_labels[[i]] <- curr_label
-          
-          cat(sprintf("  Adjusted label at x=%.1f, new y=%.3f\n", 
-                     curr_label$x, curr_label$y))
-        }
-      }
-    }
-    
-    # Reconstruct nested structure
-    adjusted_labels <- list()
-    for (name_val in names(all_labels)) {
-      adjusted_labels[[name_val]] <- list()
-    }
-    
-    for (label in flat_labels) {
-      name_val <- label$name
-      adjusted_labels[[name_val]][[length(adjusted_labels[[name_val]]) + 1]] <- label
-    }
-    
-    return(adjusted_labels)
-  }
-  
+  if (return_data) invisible(all_results)
+}
+
+# Input validation and preparation
+#' Validate breakpoint analysis inputs and normalise requested years.
+#'
+#' @param dt data.table underpinning the analysis.
+#' @param name_input Character vector or list of target names.
+#' @param sex_param Single sex code used to subset the data.
+#' @param years Numeric vector of requested years.
+#' @param verbose Logical; print diagnostic information when TRUE.
+#' @return List containing the normalised name vector and intersected year sequence.
+validate_inputs <- function(dt, name_input, sex_param, years, verbose) {
   if (!requireNamespace("strucchange", quietly = TRUE)) {
     stop("Package 'strucchange' required: install.packages('strucchange')")
   }
@@ -403,18 +232,11 @@ detect_breakpoints <- function(dt, name_input, sex_param = "M", years = 1970:202
   }
   
   # Convert name_input to vector
-  if (is.list(name_input)) {
-    names_vec <- unlist(name_input)
-  } else {
-    names_vec <- name_input
-  }
+  names_vec <- if (is.list(name_input)) unlist(name_input) else name_input
   
-  if (verbose) cat("=== BREAKPOINT ANALYSIS ===\n")
-  if (verbose) cat("Names:", paste(names_vec, collapse=", "), "\n")
-  if (verbose) cat("Sex:", sex_param, "| Years:", min(years), "-", max(years), "\n\n")
-  
-  # Input validation
   if (verbose) {
+    cat("Names:", paste(names_vec, collapse=", "), "\n")
+    cat("Sex:", sex_param, "| Years:", min(years), "-", max(years), "\n\n")
     cat("DIAGNOSTIC - Input validation:\n")
     cat("  Dataset rows:", nrow(dt), "\n")
     cat("  Years available:", min(dt$year), "-", max(dt$year), "\n")
@@ -431,256 +253,676 @@ detect_breakpoints <- function(dt, name_input, sex_param = "M", years = 1970:202
     cat("  WARNING: Only", length(available_years), "of", length(years), "requested years available\n")
   }
   
-  name_colors <- c("#08519c", "#d94701", "#238b45", "#a50f15", "#6a51a3", "#8c2d04")
-  all_results <- list()
+  list(names_vec = names_vec, available_years = available_years)
+}
+
+# Data extraction for a single name
+#' Build a complete yearly series for one name and sex.
+#'
+#' @param dt data.table containing the raw counts.
+#' @param name_val Character scalar identifying the name of interest.
+#' @param sex_param Single sex code used to subset the data.
+#' @param available_years Numeric vector of years confirmed to exist in the data.
+#' @param verbose Logical; print diagnostic information when TRUE.
+#' @return data.table with yearly counts, total births, percentages, and metadata columns.
+extract_name_data <- function(dt, name_val, sex_param, available_years, verbose) {
+  if (verbose) cat("DIAGNOSTIC - Data extraction:\n")
   
-  # Data processing (keeping your existing logic)
-  for (idx in seq_along(names_vec)) {
-    name_val <- names_vec[idx]
-    name_color <- name_colors[((idx - 1) %% length(name_colors)) + 1]
-    
-    if (verbose) cat("\n", idx, ". Processing:", name_val, "\n")
-    
-    if (verbose) cat("DIAGNOSTIC - Data extraction:\n")
-    
-    data <- dt[sex == sex_param & year %in% available_years, 
-               .(n_total = sum(n),
-                 n_name = sum(n * (name == name_val))), 
-               by = year]
-    
-    data[, `:=`(
-      n = n_name,
-      pct = ifelse(n_total > 0, (n_name / n_total) * 100, 0),
-      name = name_val,
-      sex = sex_param
-    )]
-    
-    data[, n_name := NULL]
-    
-    complete_years <- data.table(year = available_years)
-    data <- merge(complete_years, data, by = "year", all.x = TRUE)
-    data[is.na(n), `:=`(n = 0, n_total = 0, pct = 0, name = name_val, sex = sex_param)]
-    
-    data <- data[order(year)]
-    
-    # Validation
-    if (verbose) {
-      cat("DIAGNOSTIC - Final data validation:\n")
-      cat("  Final rows:", nrow(data), "\n")
-      cat("  Expected rows:", length(available_years), "\n")
-      cat("  Year range:", range(data$year), "\n")
-      cat("  Unique years:", length(unique(data$year)), "\n")
+  data <- dt[sex == sex_param & year %in% available_years, 
+             .(n_total = sum(n),
+               n_name = sum(n * (name == name_val))), 
+             by = year]
+  
+  data[, `:=`(
+    n = n_name,
+    pct = ifelse(n_total > 0, (n_name / n_total) * 100, 0),
+    name = name_val,
+    sex = sex_param
+  )]
+  
+  data[, n_name := NULL]
+  
+  complete_years <- data.table(year = available_years)
+  data <- merge(complete_years, data, by = "year", all.x = TRUE)
+  data[is.na(n), `:=`(n = 0, n_total = 0, pct = 0, name = name_val, sex = sex_param)]
+  
+  data <- data[order(year)]
+  
+  # Validation
+  if (verbose) {
+    cat("DIAGNOSTIC - Final data validation:\n")
+    cat("  Final rows:", nrow(data), "\n")
+    cat("  Expected rows:", length(available_years), "\n")
+    cat("  Year range:", range(data$year), "\n")
+    cat("  Percentage range:", sprintf("%.4f%% - %.4f%%", min(data$pct), max(data$pct)), "\n")
+    cat("  Non-zero years:", sum(data$pct > 0), "\n")
+  }
+  
+  validate_data_integrity(data, verbose)
+  
+  return(data)
+}
+
+# Data integrity validation
+#' Ensure prepared name data has one row per year.
+#'
+#' @param data data.table produced by `extract_name_data`.
+#' @param verbose Logical; print diagnostic information when TRUE.
+#' @return NULL; stops with an error if duplicate years are detected.
+validate_data_integrity <- function(data, verbose) {
+  year_counts <- data[, .N, by = year]
+  duplicates <- year_counts[N > 1]
+  
+  if (nrow(duplicates) > 0) {
+    cat("  ERROR: Found duplicates!\n")
+    print(duplicates)
+    print(data[year %in% duplicates$year])
+    stop("Data preparation failed - duplicates found")
+  } else if (verbose) {
+    cat("  ✓ No duplicates found\n")
+  }
+}
+
+# Breakpoint detection
+#' Run structural breakpoint detection on the non-zero percentage series.
+#'
+#' @param data data.table containing the processed name metrics.
+#' @param name_val Character scalar naming the series (used for logging).
+#' @param h Minimum segment size passed to `strucchange::breakpoints`.
+#' @param verbose Logical; print diagnostic information when TRUE.
+#' @return List with detected breakpoint years and the raw `breakpoints` object.
+perform_breakpoint_analysis <- function(data, name_val, h, verbose) {
+  if (nrow(data) < 10) {
+    warning(paste("Insufficient data for", name_val))
+    return(list(bp_years = numeric(0), bp_test = NULL))
+  }
+  
+  data_for_bp <- data[pct > 0]
+  if (nrow(data_for_bp) < 10) {
+    if (verbose) cat("  Not enough non-zero data points for breakpoint analysis\n")
+    return(list(bp_years = numeric(0), bp_test = NULL))
+  }
+  
+  if (verbose) {
+    cat("DIAGNOSTIC - Breakpoint detection:\n")
+    cat("  Non-zero data points:", nrow(data_for_bp), "\n")
+  }
+  
+  ts_data <- ts(data_for_bp$pct, start = min(data_for_bp$year))
+  bp_test <- tryCatch({
+    strucchange::breakpoints(ts_data ~ 1, h = h)
+  }, error = function(e) {
+    if (verbose) cat("  Breakpoint detection error:", e$message, "\n")
+    return(NULL)
+  })
+  
+  if (is.null(bp_test)) {
+    return(list(bp_years = numeric(0), bp_test = NULL))
+  }
+  
+  bp_indices <- if(!is.na(bp_test$breakpoints[1])) bp_test$breakpoints else numeric(0)
+  bp_years <- if (length(bp_indices) > 0) data_for_bp$year[bp_indices] else numeric(0)
+  
+  if (verbose) {
+    cat("  Breakpoints found:", length(bp_years), "\n")
+    if (length(bp_years) > 0) {
+      cat("  Breakpoint years:", paste(bp_years, collapse=", "), "\n")
     }
+  }
+  
+  list(bp_years = bp_years, bp_test = bp_test)
+}
+
+# Segment analysis
+#' Summarise linear trends within segments bounded by breakpoints.
+#'
+#' @param data data.table containing yearly percentages for the name.
+#' @param bp_years Numeric vector of breakpoint years returned by `perform_breakpoint_analysis`.
+#' @param verbose Logical; print diagnostic information when TRUE.
+#' @return List of segment metadata lists produced by `analyze_single_segment`.
+analyze_segments <- function(data, bp_years, verbose) {
+  segments_list <- list()
+  
+  if (length(bp_years) > 0) {
+    bp_indices_full <- match(bp_years, data$year)
+    segment_indices <- c(1, bp_indices_full, nrow(data))
+  } else {
+    segment_indices <- c(1, nrow(data))
+  }
+  
+  overall_sd <- sd(data$pct[data$pct > 0])
+  slope_threshold <- overall_sd * 0.01
+  
+  for (i in 1:(length(segment_indices) - 1)) {
+    start_idx <- segment_indices[i]
+    end_idx <- segment_indices[i + 1]
+    seg_data <- data[start_idx:end_idx]
     
-    year_counts <- data[, .N, by = year]
-    duplicates <- year_counts[N > 1]
-    
-    if (nrow(duplicates) > 0) {
-      cat("  ERROR: Found duplicates!\n")
-      print(duplicates)
-      print(data[year %in% duplicates$year])
-      stop("Data preparation failed - duplicates found")
-    } else if (verbose) {
-      cat("  ✓ No duplicates found\n")
+    if (nrow(seg_data) >= 3) {
+      segment <- analyze_single_segment(seg_data, i, slope_threshold, verbose)
+      if (!is.null(segment)) {
+        segments_list[[i]] <- segment
+      }
     }
+  }
+  
+  return(segments_list)
+}
+
+# Single segment analysis
+#' Fit a linear model to a single segment and classify its trend.
+#'
+#' @param seg_data data.table slice representing one contiguous segment.
+#' @param segment_num Integer index of the segment (for labelling).
+#' @param slope_threshold Numeric slope threshold derived from series variability.
+#' @param verbose Logical; print diagnostic information when TRUE.
+#' @return List describing the segment metrics, or NULL when the fit is not viable.
+analyze_single_segment <- function(seg_data, segment_num, slope_threshold, verbose) {
+  lm_fit <- lm(pct ~ year, data = seg_data)
+  slope <- coef(lm_fit)[2]
+  r_squared <- summary(lm_fit)$r.squared
+  p_value <- summary(lm_fit)$coefficients[2, 4]
+  
+  conf_int <- tryCatch(confint(lm_fit, "year", level = 0.95), 
+                      error = function(e) matrix(c(-Inf, Inf), nrow = 1))
+  
+  if (slope > slope_threshold && conf_int[1] > 0) {
+    trend <- "Rising"; trend_symbol <- "↑"
+  } else if (slope < -slope_threshold && conf_int[2] < 0) {
+    trend <- "Declining"; trend_symbol <- "↓"
+  } else {
+    trend <- "Stable"; trend_symbol <- "→"
+  }
+  
+  segment <- list(
+    segment_num = segment_num, 
+    start_year = seg_data$year[1], 
+    end_year = seg_data$year[nrow(seg_data)],
+    start_pct = seg_data$pct[1], 
+    end_pct = seg_data$pct[nrow(seg_data)],
+    slope_per_decade = slope * 10, 
+    r_squared = r_squared, 
+    p_value = p_value,
+    trend = trend, 
+    trend_symbol = trend_symbol
+  )
+  
+  if (verbose) {
+    cat(sprintf("    Segment %d (%d-%d): %s %s (%.3f%%/decade, R²=%.2f)\n",
+                segment_num, seg_data$year[1], seg_data$year[nrow(seg_data)],
+                trend_symbol, trend, slope * 10, r_squared))
+  }
+  
+  return(segment)
+}
+
+# Main plotting function
+#' Draw the breakpoint summary plot for one or more names.
+#'
+#' @param all_results Named list of per-name analysis outputs from `detect_breakpoints`.
+#' @param show_segment_labels Logical; add annotated segment labels when TRUE.
+#' @return NULL; sets up the plotting surface and delegates drawing tasks.
+create_breakpoint_plot <- function(all_results, show_segment_labels) {
+  par(mar = c(5, 4, 4, 8), xpd = FALSE)
+  
+  # Calculate plot ranges
+  all_years_range <- range(unlist(lapply(all_results, function(r) range(r$data$year))))
+  all_pcts_range <- range(unlist(lapply(all_results, function(r) range(r$data$pct))))
+  plot_ylim <- c(0, max(all_pcts_range) * 1.15)
+  
+  # Create base plot
+  plot(NA, xlim = all_years_range, ylim = plot_ylim,
+       xlab = "Year", ylab = "Percentage of births (%)",
+       main = paste("Breakpoint Analysis:", paste(names(all_results), collapse=", ")),
+       las = 1, frame.plot = FALSE)
+  
+  grid(col = "gray92", lty = 1, lwd = 0.5)
+  
+  # Plot lines and breakpoints
+  plot_lines_and_breakpoints(all_results)
+  
+  # Add segment labels if requested
+  if (show_segment_labels) {
+    add_segment_labels(all_results, all_years_range, plot_ylim)
+  }
+  
+  # Add legend
+  add_plot_legend(all_results)
+}
+
+# Plot the actual lines and breakpoint markers
+#' Add per-name percentage lines and breakpoint markers to the active plot.
+#'
+#' @param all_results Named list of per-name analysis outputs.
+#' @return NULL; adds lines and markers to the current plotting device.
+plot_lines_and_breakpoints <- function(all_results) {
+  for (name_val in names(all_results)) {
+    result <- all_results[[name_val]]
     
-    if (verbose) {
-      cat("  Percentage range:", sprintf("%.4f%% - %.4f%%", min(data$pct), max(data$pct)), "\n")
-      cat("  Non-zero years:", sum(data$pct > 0), "\n")
+    # Plot line
+    lines(result$data$year, result$data$pct, col = result$color, lwd = 2.8)
+    points(result$data$year, result$data$pct, col = result$color, pch = 19, cex = 0.3)
+    
+    # Breakpoint markers
+    if (length(result$breakpoints) > 0) {
+      for (bp_year in result$breakpoints) {
+        bp_row <- result$data[year == bp_year]
+        if (nrow(bp_row) > 0) {
+          abline(v = bp_year, col = result$color, lwd = 3, lty = 2, xpd = FALSE)
+          points(bp_year, bp_row$pct, pch = 23, col = "white", 
+                 bg = result$color, cex = 2.5, lwd = 3)
+        }
+      }
     }
+  }
+}
+
+# Add segment labels with intelligent positioning
+#' Annotate the breakpoint plot with per-segment text boxes.
+#'
+#' @param all_results Named list of per-name analysis outputs.
+#' @param plot_xlim Numeric vector of x-axis limits used by the plot.
+#' @param plot_ylim Numeric vector of y-axis limits used by the plot.
+#' @return NULL; draws labelled boxes and leader lines on the active plot.
+add_segment_labels <- function(all_results, plot_xlim, plot_ylim) {
+  cat("\nDIAGNOSTIC - Adding segment labels\n")
+  
+  # Calculate positions
+  positioned_labels <- position_segment_labels(all_results, plot_xlim, plot_ylim)
+  
+  # Resolve overlaps
+  final_labels <- resolve_label_overlaps(positioned_labels, plot_xlim, plot_ylim)
+  
+  # Draw the labels
+  par(xpd = TRUE)
+  
+  for (name_val in names(final_labels)) {
+    name_labels <- final_labels[[name_val]]
     
-    if (nrow(data) < 10) {
-      warning(paste("Insufficient data for", name_val))
-      next
+    for (label in name_labels) {
+      # Draw connecting line from label to segment midpoint
+      result <- all_results[[name_val]]
+      closest_data_idx <- which.min(abs(result$data$year - label$x))
+      line_y <- result$data$pct[closest_data_idx]
+      
+      # Draw subtle connecting line
+      segments(label$x, line_y, label$x, label$y, 
+              col = alpha(label$color, 0.4), lwd = 1, lty = 3)
+      
+      # Add the text box
+      add_text_box(label$x, label$y, label$text,
+                   cex = 0.65, col = label$color, font = 1,
+                   adj = c(0.5, 0.5),
+                   size_multiplier_x = 1.1, size_multiplier_y = 1.2,
+                   glass_effect = TRUE, glass_style = "clean")
     }
-    
-    # Breakpoint detection
-    data_for_bp <- data[pct > 0]
-    if (nrow(data_for_bp) < 10) {
-      if (verbose) cat("  Not enough non-zero data points for breakpoint analysis\n")
-      all_results[[name_val]] <- list(
-        data = data, breakpoints = numeric(0), segments = list(), 
-        bp_test = NULL, color = name_color
-      )
-      next
-    }
-    
-    if (verbose) {
-      cat("DIAGNOSTIC - Breakpoint detection:\n")
-      cat("  Non-zero data points:", nrow(data_for_bp), "\n")
-    }
-    
-    ts_data <- ts(data_for_bp$pct, start = min(data_for_bp$year))
-    bp_test <- tryCatch({
-      strucchange::breakpoints(ts_data ~ 1, h = h)
-    }, error = function(e) {
-      if (verbose) cat("  Breakpoint detection error:", e$message, "\n")
-      return(NULL)
+  }
+  
+  par(xpd = FALSE)
+}
+
+# Add legend to plot
+#' Add a legend summarising names and breakpoint counts.
+#'
+#' @param all_results Named list of per-name analysis outputs.
+#' @return NULL; draws a legend when multiple names are present.
+add_plot_legend <- function(all_results) {
+  if (length(all_results) > 1) {
+    par(xpd = TRUE)
+    legend_items <- sapply(names(all_results), function(n) {
+      n_bp <- length(all_results[[n]]$breakpoints)
+      paste0(n, " (", n_bp, " BP)")
     })
     
-    if (is.null(bp_test)) {
-      all_results[[name_val]] <- list(
-        data = data, breakpoints = numeric(0), segments = list(),
-        bp_test = NULL, color = name_color
-      )
-      next
-    }
-    
-    bp_indices <- if(!is.na(bp_test$breakpoints[1])) bp_test$breakpoints else numeric(0)
-    bp_years <- if (length(bp_indices) > 0) data_for_bp$year[bp_indices] else numeric(0)
-    
-    if (verbose) {
-      cat("  Breakpoints found:", length(bp_years), "\n")
-      if (length(bp_years) > 0) {
-        cat("  Breakpoint years:", paste(bp_years, collapse=", "), "\n")
-      }
-    }
-    
-    # Segment analysis
-    segments_list <- list()
-    if (length(bp_years) > 0) {
-      bp_indices_full <- match(bp_years, data$year)
-      segment_indices <- c(1, bp_indices_full, nrow(data))
-    } else {
-      segment_indices <- c(1, nrow(data))
-    }
-    
-    overall_sd <- sd(data$pct[data$pct > 0])
-    slope_threshold <- overall_sd * 0.01
-    
-    for (i in 1:(length(segment_indices) - 1)) {
-      start_idx <- segment_indices[i]
-      end_idx <- segment_indices[i + 1]
-      seg_data <- data[start_idx:end_idx]
-      
-      if (nrow(seg_data) >= 3) {
-        lm_fit <- lm(pct ~ year, data = seg_data)
-        slope <- coef(lm_fit)[2]
-        r_squared <- summary(lm_fit)$r.squared
-        p_value <- summary(lm_fit)$coefficients[2, 4]
-        
-        conf_int <- tryCatch(confint(lm_fit, "year", level = 0.95), 
-                           error = function(e) matrix(c(-Inf, Inf), nrow = 1))
-        
-        if (slope > slope_threshold && conf_int[1] > 0) {
-          trend <- "Rising"; trend_symbol <- "↑"
-        } else if (slope < -slope_threshold && conf_int[2] < 0) {
-          trend <- "Declining"; trend_symbol <- "↓"
-        } else {
-          trend <- "Stable"; trend_symbol <- "→"
-        }
-        
-        segments_list[[i]] <- list(
-          segment_num = i, start_year = seg_data$year[1], end_year = seg_data$year[nrow(seg_data)],
-          start_pct = seg_data$pct[1], end_pct = seg_data$pct[nrow(seg_data)],
-          slope_per_decade = slope * 10, r_squared = r_squared, p_value = p_value,
-          trend = trend, trend_symbol = trend_symbol
-        )
-        
-        if (verbose) {
-          cat(sprintf("    Segment %d (%d-%d): %s %s (%.3f%%/decade, R²=%.2f)\n",
-                      i, seg_data$year[1], seg_data$year[nrow(seg_data)],
-                      trend_symbol, trend, slope * 10, r_squared))
-        }
-      }
-    }
-    
-    all_results[[name_val]] <- list(
-      data = data, breakpoints = bp_years, segments = segments_list,
-      bp_test = bp_test, color = name_color
-    )
+    legend(x = par("usr")[2] + diff(par("usr")[1:2]) * 0.02, y = par("usr")[4],
+           legend = legend_items, col = sapply(all_results, function(r) r$color),
+           lwd = 2.8, lty = 1, bty = "n", cex = 0.85)
   }
-  
-  # ENHANCED PLOTTING with positioned segment labels
-  if (plot && length(all_results) > 0) {
-    # Only single plot mode (multiple names on same graph)
-    par(mar = c(5, 4, 4, 8), xpd = FALSE)
-    
-    all_years_range <- range(unlist(lapply(all_results, function(r) range(r$data$year))))
-    all_pcts_range <- range(unlist(lapply(all_results, function(r) range(r$data$pct))))
-    
-    plot(NA, xlim = all_years_range, ylim = c(0, max(all_pcts_range) * 1.15),
-         xlab = "Year", ylab = "Percentage of births (%)",
-         main = paste("Breakpoint Analysis:", paste(names(all_results), collapse=", ")),
-         las = 1, frame.plot = FALSE)
-    
-    grid(col = "gray92", lty = 1, lwd = 0.5)
-    
-    # Plot all the lines and breakpoints first
-    for (name_val in names(all_results)) {
-      result <- all_results[[name_val]]
-      
-      # Plot line
-      lines(result$data$year, result$data$pct, col = result$color, lwd = 2.8)
-      points(result$data$year, result$data$pct, col = result$color, pch = 19, cex = 0.3)
-      
-      # Breakpoint markers
-      if (length(result$breakpoints) > 0) {
-        for (bp_year in result$breakpoints) {
-          bp_row <- result$data[year == bp_year]
-          if (nrow(bp_row) > 0) {
-            abline(v = bp_year, col = result$color, lwd = 3, lty = 2, xpd = FALSE)
-            points(bp_year, bp_row$pct, pch = 23, col = "white", 
-                   bg = result$color, cex = 2.5, lwd = 3)
-          }
-        }
-      }
-    }
-    
-    # NOW ADD SEGMENT LABELS with intelligent positioning
-    if (show_segment_labels) {
-      cat("\nDIAGNOSTIC - Adding segment labels\n")
-      
-      # Calculate positions
-      positioned_labels <- position_segment_labels(all_results, all_years_range, 
-                                                   c(0, max(all_pcts_range) * 1.15))
-      
-      # Resolve overlaps
-      final_labels <- resolve_label_overlaps(positioned_labels, all_years_range, 
-                                            c(0, max(all_pcts_range) * 1.15))
-      
-      # Draw the labels
-      par(xpd = TRUE)  # Allow drawing outside plot region
-      
-      for (name_val in names(final_labels)) {
-        name_labels <- final_labels[[name_val]]
-        
-        for (label in name_labels) {
-          # Draw connecting line from label to segment midpoint
-          # Get actual line y-value at this x position
-          result <- all_results[[name_val]]
-          closest_data_idx <- which.min(abs(result$data$year - label$x))
-          line_y <- result$data$pct[closest_data_idx]
-          
-          # Draw subtle connecting line
-          segments(label$x, line_y, label$x, label$y, 
-                  col = alpha(label$color, 0.4), lwd = 1, lty = 3)
-          
-          # Add the text box
-          add_text_box(label$x, label$y, label$text,
-                       cex = 0.65, col = label$color, font = 1,
-                       adj = c(0.5, 0.5),
-                       size_multiplier_x = 1.1, size_multiplier_y = 1.2,
-                       glass_effect = TRUE, glass_style = "clean")
-        }
-      }
-      
-      par(xpd = FALSE)  # Reset
-    }
-    
-    # Legend
-    if (length(all_results) > 1) {
-      par(xpd = TRUE)
-      legend_items <- sapply(names(all_results), function(n) {
-        n_bp <- length(all_results[[n]]$breakpoints)
-        paste0(n, " (", n_bp, " BP)")
-      })
-      
-      legend(x = par("usr")[2] + diff(par("usr")[1:2]) * 0.02, y = par("usr")[4],
-             legend = legend_items, col = sapply(all_results, function(r) r$color),
-             lwd = 2.8, lty = 1, bty = "n", cex = 0.85)
-    }
-  }
-  
-  if (return_data) invisible(all_results)
 }
+
+#' Draw a rounded text box with optional glass styling.
+#'
+#' @param x Numeric x-coordinate for the label centre.
+#' @param y Numeric y-coordinate for the label centre.
+#' @param text Character string to display inside the box.
+#' @param cex Numeric text expansion factor.
+#' @param col Character colour applied to the text and (optionally) border.
+#' @param size_multiplier_x Numeric scaling factor for horizontal padding.
+#' @param size_multiplier_y Numeric scaling factor for vertical padding.
+#' @param glass_effect Logical; fill the box with a translucent highlight when TRUE.
+#' @param glass_style Character string selecting the glass effect variant.
+#' @param font Integer font face passed to `text`.
+#' @param adj Numeric vector passed to `text` to control justification.
+#' @param xpd Logical; allow plotting outside the clip region when TRUE.
+#' @return NULL; adds an annotated text element to the current plot.
+add_text_box <- function(x, y, text, cex = 0.8, col = "black", 
+                        size_multiplier_x = 1.0, size_multiplier_y = 1.5,
+                        glass_effect = TRUE, glass_style = "clean",
+                        font = 1, adj = c(0.5, 0.5), xpd = TRUE) {
+  
+  text_width <- strwidth(text, cex = cex, font = font)
+  text_height <- strheight(text, cex = cex, font = font)
+  
+  base_padding_x <- text_width * 0.075
+  base_padding_y <- text_height * 0.4
+  padding_x <- base_padding_x * size_multiplier_x
+  padding_y <- base_padding_y * size_multiplier_y
+  
+  if(adj[1] == 0.5) {
+    left <- x - (text_width / 2) - padding_x
+    right <- x + (text_width / 2) + padding_x
+  } else if(adj[1] == 0) {
+    left <- x - padding_x
+    right <- x + text_width + padding_x
+  } else {
+    left <- x - text_width - padding_x
+    right <- x + padding_x
+  }
+  
+  bottom <- y - (text_height / 2) - padding_y
+  top <- y + (text_height / 2) + padding_y
+  
+  if(glass_effect && glass_style == "clean") {
+    rect(left, bottom, right, top, 
+          col = rgb(1, 1, 1, 0.8),
+          border = NA, xpd = xpd)
+  }
+  
+  text(x, y, text, cex = cex, col = col, font = font, adj = adj, xpd = xpd)
+}
+  
+# Smart positioning function for segment labels
+#' Compute initial positions for segment labels above or below the series.
+#'
+#' @param all_results Named list of per-name analysis outputs.
+#' @param plot_xlim Numeric vector of x-axis limits used by the plot.
+#' @param plot_ylim Numeric vector of y-axis limits used by the plot.
+#' @return Named list of label definitions to feed into `resolve_label_overlaps`.
+position_segment_labels <- function(all_results, plot_xlim, plot_ylim) {
+  all_labels <- list()
+  
+  for (name_val in names(all_results)) {
+    result <- all_results[[name_val]]
+    
+    if (length(result$segments) == 0) next
+    
+    cat("DIAGNOSTIC - Positioning labels for", name_val, "\n")
+    
+    name_labels <- list()
+    
+    for (seg in result$segments) {
+      if (is.null(seg)) next
+      
+      # Calculate midpoint year
+      mid_year <- (seg$start_year + seg$end_year) / 2
+      
+      # Get the actual data value at midpoint (interpolate if needed)
+      seg_data_subset <- result$data[year >= seg$start_year & year <= seg$end_year]
+      
+      # Find closest year to midpoint
+      closest_year_idx <- which.min(abs(seg_data_subset$year - mid_year))
+      mid_pct <- seg_data_subset$pct[closest_year_idx]
+      
+      # If midpoint falls between years, interpolate
+      if (abs(seg_data_subset$year[closest_year_idx] - mid_year) > 0.5) {
+        before_idx <- max(1, closest_year_idx - 1)
+        after_idx <- min(nrow(seg_data_subset), closest_year_idx + 1)
+        
+        if (before_idx != after_idx) {
+          weight <- (mid_year - seg_data_subset$year[before_idx]) / 
+                    (seg_data_subset$year[after_idx] - seg_data_subset$year[before_idx])
+          mid_pct <- seg_data_subset$pct[before_idx] * (1 - weight) + 
+                    seg_data_subset$pct[after_idx] * weight
+        }
+      }
+      
+      # Create label text (two lines)
+      label_line1 <- sprintf("Segment %d (%d-%d)", seg$segment_num, seg$start_year, seg$end_year)
+      label_line2 <- sprintf("%s %s (%.3f%%/decade, R²=%.2f)", 
+                            seg$trend_symbol, seg$trend, seg$slope_per_decade, seg$r_squared)
+      label_text <- paste(label_line1, label_line2, sep = "\n")
+      
+      # Determine if label should go above or below line
+      # Strategy: alternate above/below, but also consider line slope and available space
+      plot_height <- diff(plot_ylim)
+      
+      # Start with alternating pattern
+      base_above <- (seg$segment_num %% 2 == 1)
+      
+      # Adjust based on line position relative to plot
+      line_position_ratio <- mid_pct / max(plot_ylim)
+      
+      # If line is in top 40% of plot, prefer below
+      if (line_position_ratio > 0.6) {
+        above_line <- FALSE
+      } else if (line_position_ratio < 0.3) {
+        # If line is in bottom 30% of plot, prefer above
+        above_line <- TRUE
+      } else {
+        # Use alternating pattern in middle range
+        above_line <- base_above
+      }
+      
+      # Calculate vertical offset
+      base_offset <- plot_height * 0.08  # 8% of plot height
+      
+      if (above_line) {
+        label_y <- mid_pct + base_offset
+      } else {
+        label_y <- mid_pct - base_offset
+      }
+      
+      # Ensure label stays within plot bounds
+      label_y <- max(plot_ylim[1] + plot_height * 0.05, 
+                    min(plot_ylim[2] - plot_height * 0.05, label_y))
+      
+      cat(sprintf("  Segment %d: mid_year=%.1f, mid_pct=%.3f, label_y=%.3f, %s\n",
+                  seg$segment_num, mid_year, mid_pct, label_y, 
+                  ifelse(above_line, "above", "below")))
+      
+      name_labels[[length(name_labels) + 1]] <- list(
+        x = mid_year,
+        y = label_y,
+        text = label_text,
+        color = result$color,
+        above_line = above_line,
+        segment_num = seg$segment_num,
+        name = name_val
+      )
+    }
+    
+    all_labels[[name_val]] <- name_labels
+  }
+  
+  return(all_labels)
+}
+
+# Overlap resolution function
+#' Adjust label positions to minimise visual overlap.
+#'
+#' @param all_labels Named list of label definitions from `position_segment_labels`.
+#' @param plot_xlim Numeric vector of x-axis limits used by the plot.
+#' @param plot_ylim Numeric vector of y-axis limits used by the plot.
+#' @return Named list of label definitions with refined positions.
+resolve_label_overlaps <- function(all_labels, plot_xlim, plot_ylim) {
+  # Flatten all labels into single list for overlap detection
+  flat_labels <- list()
+  for (name_val in names(all_labels)) {
+    for (label in all_labels[[name_val]]) {
+      flat_labels[[length(flat_labels) + 1]] <- label
+    }
+  }
+  
+  if (length(flat_labels) <= 1) return(all_labels)
+  
+  cat("DIAGNOSTIC - Resolving", length(flat_labels), "label overlaps\n")
+  
+  # Sort by x position
+  flat_labels <- flat_labels[order(sapply(flat_labels, function(l) l$x))]
+  
+  plot_height <- diff(plot_ylim)
+  min_vertical_separation <- plot_height * 0.12  # Minimum 12% separation
+  
+  # Adjust overlapping labels
+  for (i in 2:length(flat_labels)) {
+    curr_label <- flat_labels[[i]]
+    prev_label <- flat_labels[[i-1]]
+    
+    # Check horizontal overlap (labels need some x-separation too)
+    x_overlap <- abs(curr_label$x - prev_label$x) < diff(plot_xlim) * 0.08
+    
+    if (x_overlap) {
+      y_diff <- abs(curr_label$y - prev_label$y)
+      
+      if (y_diff < min_vertical_separation) {
+        # Push current label away from previous
+        if (curr_label$y > prev_label$y) {
+          # Current is above, push it higher
+          curr_label$y <- prev_label$y + min_vertical_separation
+        } else {
+          # Current is below, push it lower
+          curr_label$y <- prev_label$y - min_vertical_separation
+        }
+        
+        # Keep within bounds
+        curr_label$y <- max(plot_ylim[1] + plot_height * 0.05,
+                            min(plot_ylim[2] - plot_height * 0.05, curr_label$y))
+        
+        flat_labels[[i]] <- curr_label
+        
+        cat(sprintf("  Adjusted label at x=%.1f, new y=%.3f\n", 
+                    curr_label$x, curr_label$y))
+      }
+    }
+  }
+  
+  # Reconstruct nested structure
+  adjusted_labels <- list()
+  for (name_val in names(all_labels)) {
+    adjusted_labels[[name_val]] <- list()
+  }
+  
+  for (label in flat_labels) {
+    name_val <- label$name
+    adjusted_labels[[name_val]][[length(adjusted_labels[[name_val]]) + 1]] <- label
+  }
+  
+  return(adjusted_labels)
+}
+
+#' Visualize breakpoint segments as color-coded timelines.
+#'
+#' @param results Named list returned by `detect_breakpoints()`.
+#' @param show_breakpoints Logical; add vertical markers at breakpoint years.
+#' @param show_labels Logical; print slope/trend text inside each segment.
+#' @param trend_colors Named vector giving fill/border colours for
+#'   `Rising`, `Stable`, and `Declining` segments.
+#' @param stripe_height Numeric half-height of the horizontal band per name.
+#' @param label_cex Numeric expansion factor for segment labels.
+#'
+#' @return NULL; draws on the active base-R device.
+plot_breakpoint_segments <- function(results,
+                                     show_breakpoints = TRUE,
+                                     show_labels = TRUE,
+                                     trend_colors = c(
+                                       Rising = "#238b45",
+                                       Stable = "#636363",
+                                       Declining = "#cb181d"
+                                     ),
+                                     stripe_height = 0.35,
+                                     label_cex = 0.7) {
+
+  if (!length(results)) stop("`results` must include at least one analysed name.")
+  if (!requireNamespace("data.table", quietly = TRUE)) {
+    stop("Package `data.table` is required.")
+  }
+
+  res_names <- names(results)
+  if (is.null(res_names) || any(!nzchar(res_names))) {
+    stop("`results` should be the named list returned by detect_breakpoints().")
+  }
+
+  seg_records <- data.table::rbindlist(lapply(res_names, function(name_val) {
+    entry <- results[[name_val]]
+    if (is.null(entry$segments) || !length(entry$segments)) return(NULL)
+
+    data.table::rbindlist(lapply(entry$segments, function(seg) {
+      data.table::data.table(
+        name = name_val,
+        segment = seg$segment_num,
+        start = seg$start_year,
+        end = seg$end_year,
+        trend = seg$trend,
+        slope = seg$slope_per_decade,
+        r_squared = seg$r_squared,
+        color = entry$color
+      )
+    }))
+  }), fill = TRUE)
+
+  if (is.null(seg_records) || nrow(seg_records) == 0) {
+    stop("No segment information available to plot.")
+  }
+
+  seg_records[, end := ifelse(end == start, end + 0.1, end)]
+  seg_records[, y := match(name, unique(name))]
+
+  yr_limits <- range(c(seg_records$start, seg_records$end))
+  y_limits <- c(0.5, length(unique(seg_records$name)) + 0.5)
+
+  old_par <- par(no.readonly = TRUE)
+  on.exit(par(old_par))
+  par(mar = c(4, 6, 2, 2), las = 1)
+
+  plot(NA, xlim = yr_limits, ylim = y_limits,
+       xlab = "Year", ylab = "", yaxt = "n",
+       main = "Breakpoint Segments by Trend", bty = "n")
+  axis(2, at = seq_along(unique(seg_records$name)),
+       labels = unique(seg_records$name), tick = FALSE, las = 1)
+  abline(h = seq_along(unique(seg_records$name)), col = "gray92", lty = 3)
+
+  for (name_val in unique(seg_records$name)) {
+    entry <- results[[name_val]]
+    y_pos <- seg_records[name == name_val, unique(y)]
+
+    seg_subset <- seg_records[name == name_val][order(start)]
+    for (j in seq_len(nrow(seg_subset))) {
+      seg <- seg_subset[j]
+      trend_col <- trend_colors[seg$trend]
+      if (is.na(trend_col)) trend_col <- "#888888"
+      fill_col <- grDevices::adjustcolor(trend_col, alpha.f = 0.25)
+
+      rect(seg$start, y_pos - stripe_height,
+           seg$end, y_pos + stripe_height,
+           col = fill_col, border = trend_col, lwd = 2)
+
+      if (show_labels) {
+        lab <- sprintf("%s | %+0.2f%%/dec | R²=%0.2f",
+                       seg$trend, seg$slope, seg$r_squared)
+        text(x = mean(c(seg$start, seg$end)),
+             y = y_pos,
+             labels = lab,
+             cex = label_cex,
+             col = trend_col)
+      }
+    }
+
+    if (show_breakpoints && length(entry$breakpoints)) {
+      for (bp_year in entry$breakpoints) {
+        segments(bp_year, y_pos - stripe_height - 0.1,
+                 bp_year, y_pos + stripe_height + 0.1,
+                 col = entry$color %||% "#222222",
+                 lwd = 2, lty = 2, lend = "butt")
+      }
+    }
+  }
+
+  legend("topright",
+         legend = names(trend_colors),
+         fill = grDevices::adjustcolor(trend_colors, alpha.f = 0.25),
+         border = trend_colors,
+         title = "Segment Trend",
+         bty = "n")
+}
+
+`%||%` <- function(x, fallback) if (is.null(x) || (length(x) == 1 && is.na(x))) fallback else x

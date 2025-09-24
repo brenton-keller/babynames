@@ -147,12 +147,104 @@ k_coverage <- function(dt, p = c(.5, .8, .9), by = c("year","sex")){
 }
 
 plot_k <- function(kdt, k = "K50") {
+  op <- par(mfrow = c(2,1), mar = c(4,4,2,1)); on.exit(par(op))
   cols <- c(M="blue", F="red")
-  rng <- range(kdt[[k]], na.rm=TRUE)
-  plot(NA, xlim=range(kdt$year), ylim=rng, xlab="Year", ylab=k, main=k)
   for (s in sort(unique(kdt$sex))) {
     d <- kdt[sex == s][order(year)]
-    lines(d$year, d[[k]], col=cols[s], lwd=2)
+    yv <- d[[k]]
+    plot(d$year, yv, type="l", lwd=2, col=cols[s], xlab="Year", ylab=k,
+         main = paste0(k, " (", s, ")"))
+    points(d$year, yv, pch=16, cex=.55, col=grDevices::adjustcolor(cols[s], .5))
   }
-  legend("topleft", legend=sort(unique(kdt$sex)), col=cols[sort(unique(kdt$sex))], lwd=2, bty="n")
+}
+
+compute_diversity_story <- function(dt,
+                                    min_pct = 0.001,
+                                    min_n = 10,
+                                    start_year = 1971,
+                                    coverage_prob = c(0.5, 0.8)) {
+  stopifnot(is.data.table(dt))
+
+  filtered <- filter_rare(copy(dt), min_pct = min_pct, min_n = min_n)
+  metrics <- div_metrics(filtered, start_year = start_year)
+
+  trend <- list(
+    shannon_eff = trend_test(metrics, "shannon_eff"),
+    hill_q2 = trend_test(metrics, "hill_q2"),
+    top10 = trend_test(metrics, "top10")
+  )
+
+  diagnostics <- list(
+    shannon_eff = if ("quad_diag" %in% ls(all.names = TRUE)) quad_diag(trend$shannon_eff) else NULL,
+    hill_q2 = if ("quad_diag" %in% ls(all.names = TRUE)) quad_diag(trend$hill_q2) else NULL,
+    top10 = if ("quad_diag" %in% ls(all.names = TRUE)) quad_diag(trend$top10) else NULL
+  )
+
+  monotonic <- list(
+    shannon_eff = if ("mono_test" %in% ls(all.names = TRUE)) mono_test(metrics, "shannon_eff") else NULL,
+    hill_q2 = if ("mono_test" %in% ls(all.names = TRUE)) mono_test(metrics, "hill_q2") else NULL,
+    top10 = if ("mono_test" %in% ls(all.names = TRUE)) mono_test(metrics, "top10") else NULL
+  )
+
+  decades <- list(
+    shannon_eff = if ("decade_summary" %in% ls(all.names = TRUE)) decade_summary(metrics, "shannon_eff") else NULL,
+    top10 = if ("decade_summary" %in% ls(all.names = TRUE)) decade_summary(metrics, "top10") else NULL
+  )
+
+  coverage_source <- copy(dt)[year >= start_year]
+  coverage <- if (nrow(coverage_source)) {
+    k_coverage(coverage_source, p = coverage_prob)
+  } else {
+    data.table()
+  }
+
+  list(
+    config = list(min_pct = min_pct, min_n = min_n, start_year = start_year, coverage_prob = coverage_prob),
+    filtered = filtered,
+    metrics = metrics,
+    trend = trend,
+    quad_diagnostics = diagnostics,
+    monotonic = monotonic,
+    decades = decades,
+    coverage = coverage
+  )
+}
+
+render_diversity_story <- function(story, show_plots = interactive()) {
+  stopifnot(is.list(story), "metrics" %in% names(story))
+
+  cat("\nDiversity metrics (first three years per sex)\n")
+  print(story$metrics[order(year), head(.SD, 3), by = sex])
+
+  cat("\nTrend estimates (weighted OLS)\n")
+  print(rbindlist(story$trend, idcol = "measure"))
+
+  if (!is.null(story$monotonic$shannon_eff)) {
+    cat("\nMonotonicity tests (Kendall tau)\n")
+    print(rbindlist(story$monotonic, idcol = "measure"))
+  }
+
+  if (!is.null(story$decades$shannon_eff)) {
+    cat("\nDecade summaries for shannon_eff\n")
+    print(story$decades$shannon_eff[order(sex, decade)][, .(sex, decade, mean, delta, pct_change)])
+  }
+
+  if (nrow(story$coverage)) {
+    cat("\nCoverage snapshot (first & last year)\n")
+    coverage_summary <- story$coverage[order(year, sex)][year %in% range(year)]
+    print(coverage_summary)
+  } else {
+    cat("\nCoverage snapshot not available for selected years.\n")
+  }
+
+  if (show_plots) {
+    plot_metric(story$metrics, y = "shannon_eff")
+    plot_metric(story$metrics, y = "top10")
+    plot_k(story$coverage, k = "K50")
+    if ("K80" %in% names(story$coverage)) {
+      plot_k(story$coverage, k = "K80")
+    }
+  }
+
+  invisible(story)
 }
