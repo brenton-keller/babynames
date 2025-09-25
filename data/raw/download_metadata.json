@@ -1,0 +1,12 @@
+{
+  "download_date": ["2025-09-25"],
+  "download_time_seconds": [2.4124],
+  "national_rows": [2149477],
+  "state_rows": [6600640],
+  "include_state": [true],
+  "r_version": ["R version 4.4.1 (2024-06-14 ucrt)"],
+  "package_versions": {
+    "data.table": ["1.17.8"],
+    "curl": ["6.4.0"]
+  }
+}
